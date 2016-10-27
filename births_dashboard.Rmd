@@ -1,0 +1,68 @@
+---
+title: "Stats by Name"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(babynames)
+library(stringr)
+library(dygraphs)
+```
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+```{r shinyinputs}
+textInput(inputId = "name", label =  "Name", value = "John")
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Total US Births
+
+
+
+```{r}
+plot_data <- reactive({
+  babynames %>%
+    filter(name==str_to_title(input$name))
+})
+
+renderDygraph({
+birthsYearly <- plot_data() %>%
+  mutate(male = ifelse(sex == "M", n, 0), female = ifelse(sex == "F", n, 0)) %>%
+  group_by(year) %>%
+  summarize(Male = sum(male), Female = sum(female) ) %>%
+  arrange(year) 
+
+birthsYearly %>%
+  dygraph( ylab = "People") %>%
+  dySeries("Female") %>%
+  dySeries("Male") %>%
+  dyOptions(stackedGraph = TRUE) %>%
+  dyRangeSelector(height = 20)})
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Ratio to Total by Gender
+
+```{r}
+renderPlot({
+  ggplot(data=plot_data()) +
+    geom_line(aes(x=year, y=prop*100, group=sex, color=sex)) +
+    labs(y="Proportion Percent")
+})
+```
+
+
+

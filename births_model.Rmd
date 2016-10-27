@@ -1,0 +1,90 @@
+---
+title: "Stats by Name"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(babynames)
+library(stringr)
+library(dygraphs)
+
+unemployment <- read_csv("unemployment.csv") 
+
+population <- babynames %>%
+  group_by(year) %>%
+  summarise(births=sum(n)) %>%
+  inner_join(unemployment, by=c("year"="Year")) %>%
+  filter(year>=2000)
+
+b_model<- lm(births~Jan, data=population)
+
+```
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+```{r shinyinputs}
+textInput(inputId = "rate", label =  "Unemployment Rate", value = "5")
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Total US Births
+
+
+
+```{r}
+plot_data <- reactive({
+ population %>%
+    select(Jan) %>%
+    bind_rows(data.frame(Jan=as.numeric(input$rate)))
+})
+
+renderPlot({
+  
+  new_population <- plot_data()
+  b_pred <- as.data.frame(predict(b_model, new_population, interval="prediction")) %>%
+    mutate(year=c(2000:2015)) %>%
+    left_join(population, by="year") %>%
+    mutate(births=births/1000000, lwr=lwr/1000000, upr=upr/1000000,fit=fit/1000000)
+    
+  
+  ggplot(data=b_pred) +
+    geom_line(aes(x=year, y=lwr),color="red") +
+    geom_line(aes(x=year, y=fit),color="green") +
+    geom_line(aes(x=year, y=upr),color="blue") +
+    geom_point(aes(x=year[16], y=lwr[16]),color="red", size=3) +
+    geom_point(aes(x=year[16], y=fit[16]),color="green", size=3) +
+    geom_point(aes(x=year[16], y=upr[16]),color="blue", size=3) +
+    geom_line(aes(x=year, y=births)) +
+    labs(y="Births (In Millions)")
+    })
+
+```
+
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Unemployment Rate
+
+```{r}
+renderPlot({
+   new_population <- plot_data() %>%
+     mutate(year=c(2000:2015))
+  
+  ggplot(data=new_population) +
+    geom_bar(aes(x=year, y=Jan), stat = "identity", alpha=0.7, fill="light blue") +
+    geom_text(aes(x=year,y=Jan+0.3, label=Jan)) +
+    theme(axis.title.y = element_blank())
+})
+```
+
